@@ -70,11 +70,12 @@ To flash the target, simply call `make flash`.
 Actually, calling `make flash` will automatically recompile all your code if it has changed since the last compilation - so this is really the only command you need.
 
 ## What can the Makefile do?
-The supplied Makefile supports four commands by default, they are:
+The supplied Makefile supports five commands by default, they are:
   * make (no arguments): Compile all code that has changed
   * make flash: Compile code if necessary, then flash to executable to the microcontroller
   * make clean: Purge all compiled artifacts
   * make erase: Kill the contents of the microcontroller
+  * make fuse: Set all the fusebits to what the assignment text specifies
 
 ## I found an error, or I can't understand what you mean, Kolbjørn!
 Please do not hesitate about asking for help. Linux can be a lot to chew through at first - and my explanations ~~might not be~~ are not perfect. Also keep in mind that this is the first time we are running the lab on Linux, so expect to run into issues that I did not consider. That being said, reach me at kolbjora.austreng(at)ntnu.no, or just go to B445 and knock on my door.
