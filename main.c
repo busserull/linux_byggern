@@ -3,20 +3,21 @@
 #include <stdlib.h>
 #include "led.h"
 #include "message.h"
-/* #include "uart.h" */
 
 int main(){
 	led_init();
 	message_init();
 
+	char * buffer = (char *)malloc(20 * sizeof(char));
+
 	while(1){
-		message_write("Hello world\n\r");
+		for(int i = 0; i < 20; i++){
+			buffer[i] = '\0';
+		}
 
-		led_turn_on();
-		_delay_ms(1000);
-
-		led_turn_off();
-		_delay_ms(1000);
+		if(message_read(buffer, 20)){
+			message_write(buffer);
+		}
 	}
 
 	return 0;
