@@ -5,4 +5,6 @@
 
 #define DESIRED_BAUD_RATE 2400
 
+#define MESSAGE_BUFFER_SIZE 20
+
 #endif
