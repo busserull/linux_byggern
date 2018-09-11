@@ -15,3 +15,14 @@ void message_write(char * message){
 		uart_write(*letter);
 	}
 }
+
+int message_read(char * buffer, int size){
+	char letter = uart_read();
+	if(letter == '\0'){
+		return 0;
+	}
+
+	buffer[0] = letter;
+	buffer[1] = '\0';
+	return 1;
+}
