@@ -19,6 +19,14 @@ void uart_init(){
 		| (1 << USBS0);
 }
 
+void uart_read_interrupt_enable(){
+	UCSR0B |= (1 << RXCIE0);
+}
+
+void uart_read_interrupt_disable(){
+	UCSR0B &= ~(1 << RXCIE0);
+}
+
 void uart_write(char letter){
 	while(!(UCSR0A & (1 << UDRE0)));
 	UDR0 = letter;
