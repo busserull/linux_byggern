@@ -1,13 +1,24 @@
+#include "defines.h"
+#include <avr/interrupt.h>
 #include <stdlib.h>
 #include "message.h"
 #include "uart.h"
 
-#define BUFFER_SIZE 20
+#define MESSAGE_BUFFER_STATUS_NOT_READY 0
+#define MESSAGE_BUFFER_STATUS_READY 1
 
-static char MESSAGE_BUFFER[BUFFER_SIZE];
+static int MESSAGE_BUFFER_STATUS;
+static int MESSAGE_BUFFER_WRITE_INDEX;
+static char MESSAGE_BUFFER[MESSAGE_BUFFER_SIZE];
 
 void message_init(){
+	MESSAGE_BUFFER_WRITE_INDEX = 0;
+	MESSAGE_BUFFER_STATUS = MESSAGE_BUFFER_STATUS_NOT_READY;
+
 	uart_init();
+	uart_read_interrupt_enable();
+
+	sei();
 }
 
 void message_write(char * message){
@@ -16,13 +27,50 @@ void message_write(char * message){
 	}
 }
 
-int message_read(char * buffer, int size){
-	char letter = uart_read();
-	if(letter == '\0'){
-		return 0;
-	}
+char * message_read(){
+	if(MESSAGE_BUFFER_STATUS == MESSAGE_BUFFER_STATUS_READY){
+		/* Copy the receive buffer to avoid buffer */
+		/* access race condition */
+		char * letter = MESSAGE_BUFFER;
+		int message_length = 1;
+		while(*letter != '\0'){
+			message_length++;
+			letter++;
+		}
 
-	buffer[0] = letter;
-	buffer[1] = '\0';
-	return 1;
+		char * copy = (char *)malloc(message_length * sizeof(char));
+		for(int i = 0; i <= message_length; i++){
+			copy[i] = MESSAGE_BUFFER[i];
+		}
+
+		MESSAGE_BUFFER_WRITE_INDEX = 0;
+		MESSAGE_BUFFER_STATUS = MESSAGE_BUFFER_STATUS_NOT_READY;
+
+		return copy;
+	}
+	else{
+		return NULL;
+	}
+}
+
+__attribute__((signal)) ISR(USART0_RXC_vect){
+	if(MESSAGE_BUFFER_STATUS == MESSAGE_BUFFER_STATUS_NOT_READY){
+		char letter = uart_read();
+		MESSAGE_BUFFER[MESSAGE_BUFFER_WRITE_INDEX] = letter;
+
+		// -2: Allow space for terminating '\0'
+		if(MESSAGE_BUFFER_WRITE_INDEX < MESSAGE_BUFFER_SIZE - 2){
+			MESSAGE_BUFFER_WRITE_INDEX++;
+		}
+
+		if(letter == '\n' || letter == '\r'){
+			MESSAGE_BUFFER[MESSAGE_BUFFER_WRITE_INDEX] = '\0';
+			MESSAGE_BUFFER_STATUS = MESSAGE_BUFFER_STATUS_READY;
+		}
+
+
+	}
+	/* An else clause to disable subsequent interrupts on the same */
+	/* new data is not necessary, since the AVR will always run */
+	/* one 'main' instruction in between chained interrupts. */
 }

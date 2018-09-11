@@ -8,16 +8,20 @@ int main(){
 	led_init();
 	message_init();
 
-	char * buffer = (char *)malloc(20 * sizeof(char));
+	char * buffer = NULL;
 
 	while(1){
-		for(int i = 0; i < 20; i++){
-			buffer[i] = '\0';
+		buffer = message_read();
+
+		if(buffer != NULL){
+			message_write(buffer);
+			message_write("\n\r");
+
+			free(buffer);
+			buffer = NULL;
 		}
 
-		if(message_read(buffer, 20)){
-			message_write(buffer);
-		}
+		_delay_ms(100);
 	}
 
 	return 0;
