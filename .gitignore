@@ -1,1 +1,11 @@
+byggern
 build/
+playground/
+
+*.pygtex
+*.aux
+*.out
+*.synctex.gz
+*.log
+*.pygstyle
+*.pdf
