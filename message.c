@@ -53,9 +53,15 @@ char * message_read(){
 	}
 }
 
+
+#include <avr/io.h>
+
 __attribute__((signal)) ISR(USART0_RXC_vect){
+	PORTC ^= (1 << PC0);
+
 	if(MESSAGE_BUFFER_STATUS == MESSAGE_BUFFER_STATUS_NOT_READY){
 		char letter = uart_read();
+		/* uart_write(letter); */
 		MESSAGE_BUFFER[MESSAGE_BUFFER_WRITE_INDEX] = letter;
 
 		// -2: Allow space for terminating '\0'
