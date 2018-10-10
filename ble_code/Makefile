@@ -1,5 +1,5 @@
 # List all source files to be compiled; separate with space
-SOURCE_FILES := main.c
+SOURCE_FILES := main.c ubit.c
 
 # Feel free to ignore anything below this line
 FAMILY := nrf51
