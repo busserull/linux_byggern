@@ -3,6 +3,7 @@
 \usepackage{hyperref}
 \usepackage{minted}
 \usepackage{tikz}
+\usepackage{graphicx}
 
 \usepackage{todonotes}
 
@@ -64,10 +65,39 @@ To compile and flash code for the micro:bit, we need to install a toolchain. For
 \subsection{Hardware and Toolchain Verification}
 First off, you should call \mintinline{text}{nrfjprog --version} to see if the toolchain is set up. If this command complains, you will need to repeat section \ref{sec::toolchain_config}.\\
 \\
-On Blackboard, you can find an example .hex-file that you can flash to the micro:bit to test that it works correctly. To use it, navigate to the directory where you have the hex, and call \mintinline{text}{nrfjprog -f nrf51 ...} \todo{Add example project}
+On Blackboard, you can find an example .hex-file, aptly named "example.hex". To flash this file to the micro:bit, navigate to the directory where you have the hex, and call:
+\begin{minted}{bash}
+nrfjprog -f nrf51 --chiperase --program example.hex --reset
+\end{minted}
+The micro:bit should now start broadcasting the name "u:bit" over Bluetooth. To verify this, you may use your phone, as described in section \ref{sec::phone_verify}.
 
 \section{Use your phone for testing}
-You are free to use whatever to check your Bluetooth connection, but an easy choice is to download the "nRF Connect" app for your smart phone. This lab assignment will use that app.\todo{Add app screenshots}
+\label{sec::phone_verify}
+You are free to use whatever to check your Bluetooth connection, but an easy choice is to download the "nRF Connect" app for your smart phone. This lab assignment will use that app.\\
+\\
+When you open nRF Connect, your phone will start scanning for advertising packets, as seen in figure \ref{fig::example_scanning}. You can adjust the RSSI filter (signal strength) to only show devices that are close to you. In the image, this filter is set to $-80$ dBm, but setting it to around $-60$ is probably better if there are a lot of Bluetooth devices nearby.\\
+\\
+When you connect to the micro:bit, you will see something similar to figure \ref{fig::example_services}. The names "LED Matrix" and "Buttons" will not show up by default, but may be assigned by you, by long-pressing on the \textit{characteristic} and editing the name. Either way, the name of the characteristic is merely cosmetic.\\
+\\
+By uploading a byte different than 0x00 to the "LED Matrix" characteristic, the LED matrix should turn on; and it should turn off when you upload 0x00.\\
+\\
+The "Buttons" characteristic contains the state of the two micro:bit tactile buttons. You may read their state \textit{once} by pressing the download icon - or you may \textit{subscribe} to state updates by pressing the "notify" icon (The solid line with three arrows pointing down). With subscriptions turned on, you should see the state of the buttons update on the screen as you press- and release the buttons.
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.5\linewidth}
+\centering
+\includegraphics[width=0.9\linewidth]{example_connect_scan.png}
+\caption{nRF Connect scanning.}
+\label{fig::example_scanning}
+\end{minipage}%
+\begin{minipage}{0.5\linewidth}
+\centering
+\includegraphics[width=0.9\linewidth]{example_connect_gatt.png}
+\caption{Example services.}
+\label{fig::example_services}
+\end{minipage}
+\end{figure}
 
 \newpage
 \noindent
