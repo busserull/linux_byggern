@@ -1,0 +1,33 @@
+﻿\begin{tikzpicture}
+%\draw[gray!35] (0,0) grid (10,-7);
+\usetikzlibrary{decorations.pathreplacing}
+
+\draw[decoration={brace,amplitude=5mm}, decorate, yshift=0.1cm] (0,0) -- ++(10,0)
+node[midway, above=0.5cm] {47 bytes total};
+
+\draw[gray,dashed,thick] (2,-1) -- +(-1,-1) ++ (7,0) -- ++(0,-1)
+++(0,-1) -- +(1,-1) ++(-6,0) -- ++(-3,-1) ++(3,-1) -- +(-3,-1) ++(3,0) -- ++(4,-1);
+
+\draw[thick] (0,0) rectangle ++(1,-1) node[midway] {1}
+rectangle ++(1,1)  node[midway] {4} 
+rectangle ++(7,-1) node[midway] {Packet Data Unit (PDU): 39 bytes}
+rectangle ++(1,1) node[midway] {3};
+
+\draw[thick] (1,-2) rectangle ++(1,-1) node[midway] {2}
+rectangle ++(1,1) node[midway] {6}
+rectangle ++(6,-1) node[midway] {Advertising Data: 31 bytes};
+
+\draw[thick] (0,-4) rectangle ++(3,-1) node[midway] {AD Struct $_0$}
+rectangle ++(3,1) node[midway] {AD Struct $_1$}
+rectangle ++(1,-1) node[midway] {...}
+rectangle ++(3,1) node[midway] {AD Struct $_n$};
+
+\draw[thick] (0,-6) rectangle ++(2,-2) rectangle ++(2,2) rectangle ++(6,-2);
+\path (0,-6) rectangle ++(2,-1) node[midway] {Length}
+rectangle ++(2,1) node[midway] {Type}
+rectangle ++(6,-1) node[midway] {Actual Data};
+\path (0,-7) rectangle ++(2,-1) node[midway] {1 byte}
+rectangle ++(2,1) node[midway] {1 byte}
+rectangle ++(6,-1) node[midway] {\textit{Length} - 1 bytes};
+
+\end{tikzpicture}

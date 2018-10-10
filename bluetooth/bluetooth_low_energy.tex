@@ -7,6 +7,31 @@
 
 \usepackage{todonotes}
 
+\newcommand{\warning}[1]{
+\noindent
+\fbox{
+\begin{minipage}{0.1\linewidth}
+\raisebox{-6em}{
+\scalebox{3}{%
+\makebox[2.1em][c]{%
+\makebox[0pt][c]{\raisebox{0.3em}{\large!}}%
+\makebox[0pt][c]{\color{red}\Huge$\bigtriangleup$}}}
+}
+\end{minipage}
+\begin{minipage}{0.1\linewidth}
+\hfill
+\end{minipage}
+\begin{minipage}{0.7\linewidth}
+\vspace{1em}
+#1
+\vspace{1em}
+\end{minipage}
+\begin{minipage}{0.05\linewidth}
+\hfill
+\end{minipage}
+}
+}
+
 \title{Introducing Bluetooth Low Energy}
 \author{Kolbjørn Austreng}
 \date{}
@@ -24,9 +49,7 @@ One such protocol - Bluetooth Low Energy, or Bluetooth 4.2 (BLE for short) - is 
 \\
 Many of the students taking this course will previously have had the course "Embedded Systems" (TTK4235), in which the "BBC micro:bit" development board was used during the labs. This is an excellent platform for introducing the Bluetooth Low Energy stack, and we will be using the micro:bit platform in this course as well. TTK4235 is no prerequisite, and it should be straight forward to follow this lab assignment without having gone through that course.\\
 \\
-If no one on your group has a micro:bit, you may talk to one of the student assistants. It is also possible to use other hardware, such as an nRF52 development kit if you happen to have one, but bear in mind that other hardware platforms support different Application Programming Interfaces (APIs) for the Bluetooth stack.\\
-\\
-Beware: This lab assignment has been written for- and tested on Linux. Since Mac is Unix based, you should be able to follow relatively painlessly if you happen to be an Apple Sheeple. It is probably possible to do this using Windows as well, if you identify as a masochist - but no guarantees ;)
+If no one on your group has a micro:bit, you may talk to one of the student assistants. It is also possible to use other hardware, such as an nRF52 development kit if you happen to have one, but bear in mind that other hardware platforms support different Application Programming Interfaces (APIs) for the Bluetooth stack.
 
 \newpage
 \noindent
@@ -75,7 +98,7 @@ The micro:bit should now start broadcasting the name "u:bit" over Bluetooth. To 
 \label{sec::phone_verify}
 You are free to use whatever to check your Bluetooth connection, but an easy choice is to download the "nRF Connect" app for your smart phone. This lab assignment will use that app.\\
 \\
-When you open nRF Connect, your phone will start scanning for advertising packets, as seen in figure \ref{fig::example_scanning}. You can adjust the RSSI filter (signal strength) to only show devices that are close to you. In the image, this filter is set to $-80$ dBm, but setting it to around $-60$ is probably better if there are a lot of Bluetooth devices nearby.\\
+When you open nRF Connect, your phone will start scanning for advertising packets, as seen in figure \ref{fig::example_scanning}. You can adjust the RSSI filter (signal strength) to only show devices that are close to you. In the image, this filter is set to $-80$ dBm, but setting it to around $-60$ dBm is probably better if there are a lot of Bluetooth devices nearby.\\
 \\
 When you connect to the micro:bit, you will see something similar to figure \ref{fig::example_services}. The names "LED Matrix" and "Buttons" will not show up by default, but may be assigned by you, by long-pressing on the \textit{characteristic} and editing the name. Either way, the name of the characteristic is merely cosmetic.\\
 \\
@@ -113,7 +136,49 @@ Finally, an honest word from the author of this assignment: Sometimes, the Nordi
 Do enjoy :)
 
 \section{First steps - GAP}
-The 
+The gatekeeper of Bluetooth is the \textit{Generic Access Profile}. This is the part of Bluetooth that handles broadcasting, discovery, the setting up- and managing connections, as well as negotiating security levels.\\
+\\
+Although GAP is used to establish connections, GAP itself is connectionless, and pretty simple. The bottom line is this: When advertising, a Bluetooth device sends out an \textit{Advertising Packet} of 31 bytes every advertising interval - which can be anything between $20$ milliseconds and $10.24$ seconds.\\
+\\
+In addition to this, anyone observing the advertiser can send a \textit{scan request} to the device. Upon receiving such a scan request, the device \textit{may} respond with a \textit{Scan Response Packet}, which is also 31 bytes and can contain different information than the Advertising Packet. Note that the device is not required to respond to scan requests, however.\\
+\\
+GAP happens entirely on the Bluetooth channels 37, 38, and 39, which are reserved for advertising - as illustrated in figure \ref{fig::bluetooth_spectrum} in appendix \ref{app::intro_ble}. The reason that exactly these channels were chosen for advertising is to avoid most of the interference from WiFi, which is most noticeable on the channels 0-9, 11-20, and 23-32.\\
+\\
+To make matters a little more interesting, the Bluetooth 4.2 specification specifies 4 different ways a device can advertise. The nuances of this is not terribly important for this course, but they are listed here for the interested:
+\begin{itemize}
+\item \mintinline{text}{ADV_IND}: "Connectable undirected advertising". This is the regular way to advertise. Any other device can request a scan response or a connection.
+\item \mintinline{text}{ADV_DIRECT_IND}: "Connectable directed advertising". This is used to ask a specific central for a connection. The packet is a broadcast packet, but scanners will ignore it if the peer address does not match them. In addition, the advertiser itself will ignore all scan requests.
+\item \mintinline{text}{ADV_SCAN_IND}: "Scannable undirected advertising". In this mode, the advertiser will ignore all connection requests, but may respond to scan requests.
+\item \mintinline{text}{ADV_NONCONN_IND}: "Non-connectable undirected advertising". This is essentially just an information beacon; the advertiser will ignore all scan- and connection requests, and will simply spew out its own Advertising Packets until the end of time.
+\end{itemize}
+
+\subsection{Advertising Packet Format}
+Even though the Advertising Packet (and Scan Response Packet) consists of 31 bytes, not all are usable by the application programmer. This is because the packet is subdivided into a number of \textit{AD Structs} - or "Advertising Data Structures". Actually, truth be told, each Advertising Packet may \textit{really} send out 47 bytes over the air each advertising interval, but a lot of this is overhead, as illustrated in figure \ref{fig::pdu_breakdown}. The squares with just numbers in them denote fields that are necessary, but not of direct interest to us.\\
+\begin{figure}[ht]
+\centering
+\input{ad_struct_pdu_breakdown.pgf}
+\caption{Breakdown of each GAP advertising transmission unit.}
+\label{fig::pdu_breakdown}
+\end{figure}\\
+Despite the fact that we do not really get to use all the 31 bytes in the advertising data, we must still hand craft the entire field to comply with with the Bluetooth 4.2 spec in our code. In fact, you can see the advertising data used in the example program in listing \ref{code::example_advertise_data}.\\
+\begin{listing}[hb]
+\begin{minted}{c}
+uint8_t adv_data[] = {
+	6, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
+	'u', ':', 'b', 'i', 't',
+	3, BLE_GAP_AD_TYPE_16BIT_SERVICE_UUID_COMPLETE,
+	0x0D, 0xF0
+};
+uint8_t adv_data_length = 11;
+\end{minted}
+\caption{The advertising data field from the example hex.}
+\label{code::example_advertise_data}
+\end{listing}\\
+Note that the advertising data does not have to use all the 31 bytes available. This allows us to reduce power consumption a little if we have a really resource constrained application.
+\\
+\\
+\warning{Hey there!}
+
 
 \newpage
 \noindent
@@ -123,50 +188,10 @@ The
 \begin{figure}
 \centering
 \resizebox{\linewidth}{!}{
-\begin{tikzpicture}
-\colorlet{regular_channel_fill}{blue!15}
-\colorlet{advertise_channel_fill}{blue!40}
-
-\foreach \x in {0,1,...,19}{
-\fill[regular_channel_fill,rounded corners=0.6em](\x + 0.1, 0) -- ++(0,4) -- ++(0.8,0) -- ++(0,-4);
+\input{channel_spectrum.pgf}
 }
-\foreach \x in {0,12}{
-\fill[advertise_channel_fill,rounded corners=0.6em](\x + 0.1, 0) -- ++(0,4) -- ++(0.8,0) -- ++(0,-4);
-}
-\foreach \x in {0,1,...,19}{
-\pgfmathsetmacro{\f}{int(2402 + 2 * \x)}
-\draw[rounded corners=0.6em] (\x + 0.1,0) -- ++(0,4) -- ++(0.8,0) -- ++(0,-4);
-\path (\x,0) rectangle ++(1,4) node[midway,rotate=90] {\Large$\f$ \small MHz};
-}
-\foreach \x/\ch in {0/37,1/0,2/1,3/2,4/3,5/4,6/5,7/6,8/7,9/8,10/9,11/10,12/38,13/11,14/12,15/13,16/14,17/15,18/16,19/17}{
-\path (\x,-1) rectangle ++(1,1) node[midway] {\Large\ch};
-}
-\draw[ultra thick] (0,0) -- ++(20,0);
-\foreach \x in {1,1.5,2}{
-\fill (19.5 + \x, 0) circle [radius=0.07];
-}
-
-% Line two
-\begin{scope}[xshift=-18cm, yshift=-6cm]
-\foreach \x in {20,21,...,39}{
-\fill[regular_channel_fill,rounded corners=0.6em](\x + 0.1, 0) -- ++(0,4) -- ++(0.8,0) -- ++(0,-4);
-}
-\fill[advertise_channel_fill,rounded corners=0.6em](39 + 0.1,0) -- ++(0,4) -- ++(0.8,0) -- ++(0,-4);
-\foreach \x in {20,21,...,39}{
-\pgfmathsetmacro{\f}{int(2402 + 2 * \x)}
-\draw[rounded corners=0.6em] (\x + 0.1,0) -- ++(0,4) -- ++(0.8,0) -- ++(0,-4);
-\path (\x,0) rectangle ++(1,4) node[midway,rotate=90] {\Large$\f$ \small MHz};
-}
-\foreach \x/\ch in {20/18,21/19,22/20,23/21,24/22,25/23,26/24,27/25,28/26,29/27,30/28,31/29,32/30,33/31,34/32,35/33,36/34,37/35,38/36,39/39}{
-\path (\x,-1) rectangle ++(1,1) node[midway] {\Large\ch};
-}
-\draw[ultra thick] (20,0) -- ++(20,0);
-\foreach \x in {1,1.5,2}{
-\fill (17.5 + \x, 0) circle [radius=0.07];
-}
-\end{scope}
-\end{tikzpicture}
-}
+\caption{The Bluetooth channel spectrum.}
+\label{fig::bluetooth_spectrum}
 \end{figure}
 Blah blah
 
