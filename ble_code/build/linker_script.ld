@@ -21,8 +21,10 @@ GROUP(-lgcc -lc -lnosys)
 
 MEMORY
 {
-	FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 0x40000
-	RAM (rwx) :  ORIGIN = 0x20000000, LENGTH = 0x4000
+	FLASH (rx) : ORIGIN = 0x0001B000, LENGTH = 0x2500
+	RAM (rwx) :  ORIGIN = 0x20002078, LENGTH = 0x1F88
+	/* FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 0x40000 */
+	/* RAM (rwx) :  ORIGIN = 0x20000000, LENGTH = 0x4000 */
 }
 
 OUTPUT_FORMAT ("elf32-littlearm", "elf32-bigarm", "elf32-littlearm")
@@ -58,6 +60,13 @@ ENTRY(Reset_Handler)
 
 SECTIONS
 {
+	.fs_data :
+	{
+		PROVIDE(__start_fs_data = .);
+		KEEP(*(.fs_data))
+		PROVIDE(__stop_fs_data = .);
+	} > RAM
+
     .text :
     {
         KEEP(*(.isr_vector))
