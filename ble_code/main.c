@@ -9,24 +9,22 @@ int main(){
 	/* sd_softdevice_enable(NULL, NULL); */
 
 	ubit_uart_init();
-
-	while(1){
-		ubit_uart_print(
-			"Here are some nubers: |%6d|, |%d|, |%6d|, |%d|\n\r",
-			12, -751, -7, 571
-		);
-	}
-
 	ubit_led_matrix_init();
 	ubit_buttons_init();
+
+	int button_counter = 0;
 
 	while(1){
 		if(ubit_button_press_a()){
 			ubit_led_matrix_turn_on();
+			button_counter++;
 		}
 		else if(ubit_button_press_b()){
 			ubit_led_matrix_turn_off();
+			button_counter--;
 		}
+
+		ubit_uart_print("Button counter: %6d\n\r", button_counter);
 	}
 
 	return 0;

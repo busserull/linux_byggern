@@ -102,11 +102,13 @@ void ubit_uart_init(){
 	UART->PSELTXD = UART_TXD_PIN;
 	UART->PSELRXD = UART_RXD_PIN;
 
-	// 9600 baud
 	UART->BAUDRATE = 0x00275000;
 
 	UART->ENABLE = 4;
 
+	/* This library does not implement receiving, */
+	/* but STARTRX is necessary for correct UART*/
+	/* peripheral behavior */
 	UART->STARTRX = 1;
 }
 
