@@ -7,6 +7,9 @@
 
 \usepackage{todonotes}
 
+\setmintedinline{breaklines}
+\setminted{breaklines}
+
 \newcommand{\warning}[1]{
 \noindent
 \fbox{
@@ -163,7 +166,7 @@ Even though the Advertising Packet (and Scan Response Packet) consists of 31 byt
 Despite the fact that we do not really get to use all the 31 bytes in the advertising data, we must still hand craft the entire field to comply with with the Bluetooth 4.2 spec in our code. In fact, you can see the advertising data used in the example program in listing \ref{code::example_advertise_data}.\\
 \begin{listing}[hb]
 \begin{minted}{c}
-uint8_t adv_data[] = {
+static uint8_t adv_data[] = {
 	6, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
 	'u', ':', 'b', 'i', 't',
 	3, BLE_GAP_AD_TYPE_16BIT_SERVICE_UUID_COMPLETE,
@@ -174,10 +177,97 @@ uint8_t adv_data_length = 11;
 \caption{The advertising data field from the example hex.}
 \label{code::example_advertise_data}
 \end{listing}\\
-Note that the advertising data does not have to use all the 31 bytes available. This allows us to reduce power consumption a little if we have a really resource constrained application.
+Note that the advertising data does not have to use all the 31 bytes available. We are free to use fewer bytes, and therefore transmit less data over the air each advertising interval. This allows us to reduce power consumption a little if we have a really resource constrained application.
+
+\subsection{Write the code}
+You have already been handed out some C-files that you may build on. If you happen to be a masochist, you are of course free to discard this code and start from scratch. Otherwise, follow along.\\
 \\
+In the \mintinline{text}{main} function, you will see a call to \mintinline{text}{bluetooth_init()}. This is simply a wrapper around two calls to first initialize the Nordic SoftDevice, before enabling the Bluetooth Low Energy stack with some sane parameters. You do not need to worry about this; instead, you will be implementing the \mintinline{text}{bluetooth_gap_advertise_start()} function, which is responsible for setting up the AD structs (figure \ref{fig::pdu_breakdown}), and then enabling advertising.\\
 \\
-\warning{Hey there!}
+The first step is to open up the documentation for the Nordic SoftDevice. Open up \mintinline{text}{softdevice/s130_nrf51_2.0.1_API/html/index.html} in a web browser. From there, navigate to the \mintinline{text}{Modules} tab, then click \mintinline{text}{Generic Access Profile (GAP)}, and then click on \mintinline{text}{Functions}.\\
+\\
+You will now be greeted with a fairly intimidating looking list of things. If you are feeling a little bit overwhelmed at this point, read section \ref{sec::what_on_earth}. If you are feeling confident, feel free to skip ahead.
+
+\subsubsection{What on earth is all this?}
+\label{sec::what_on_earth}
+Most of the documentation for the Nordic SoftDevices is handed out as specially formatted comments in the header files of the SoftDevice API. You can then generate a more friendly format, such as an HTML web site, using a handy program called \mintinline{text}{doxygen}. This has already been done for you, but it is pretty easy to do yourselves as well.\\
+\\
+Doxygen is very handy for integrating documentation into code, and often leads to more up to date documentation in general. The only flip side is that the output is slightly less human friendly than it would otherwise have been, had it been hand crafted by an actual human being. Do not despair though, let us dissect this cryptic output together:
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\linewidth]{softdevice_documentation_example.png}
+\caption{SoftDevice GAP documentation except.}
+\label{fig::gap_documentation_excerpt}
+\end{figure}
+
+\noindent
+In figure \ref{fig::gap_documentation_excerpt}, you can see an excerpt of the SoftDevice GAP documentation. Each line starts with the macro \mintinline{text}{SVCALL} - which stands for "\mintinline{text}{Supervisor Call}". This is simply an implementation detail, and not something that we have any control over.\\
+The actual function that we want to call is listed after this macro. For example, in the line \mintinline{text}{SVCALL(SD_BLE_GAP_TX_POWER_SET, uint32_t [...])}, the function that is available to us is called
+
+\begin{minted}{c}
+sd_ble_gap_tx_power_set(int8_t tx_power);
+\end{minted}
+
+\noindent
+Underneath the \mintinline{text}{SVCALL} line, you can see a short description of what this function does, along with a link that will give you more detailed information about how you should use the function.\\
+\\
+Many functions will take a pointer to a custom defined struct, instead of several smaller parameters. This is again due to implementation details. In some such cases, the memory that the pointer points to, must remain available after the function has executed. In those cases, manually allocating memory or marking the variable as static is recommended.\\
+\\
+Finally, it might be worth pointing out some of the coding standard used in the SoftDevice public API:
+\begin{enumerate}
+\item There is liberal use of the \mintinline{c}{const} keyword, to signal the compiler that a variable should not be changed. This is good practice - especially when dealing with things that can easily break, such as Bluetooth code.
+\item Pointer variables are always prefixed with \mintinline{text}{p_}, and in the rare cases of pointer-to-pointer, the prefix \mintinline{text}{pp_} is used. This is heartily recommended, as it is a quick way to kill off some otherwise hard-to-find bugs.
+\item In the documentation of each function, the parameters will be marked with either \mintinline{text}{[in]}, \mintinline{text}{[out]}, or \mintinline{text}{[in,out]}. This tells you whether the function intends to modify the input parameter or not. Parameters marked \mintinline{text}{[in]} will not be modified, whereas \mintinline{text}{[out]} and \mintinline{text}{[in,out]} will.
+\end{enumerate}
+
+\subsubsection{Set the advertising data}
+The first step you need to do is setting the Advertising Packet data content. In the \mintinline{text}{bluetooth.c} file, you will find an incomplete function called \mintinline{text}{bluetooth_gap_advertise_start()}. Your task is to fill out the \mintinline{c}{static uint8_t adv_data[]} array with data according to one or more AD structs, as illustrated in figure \ref{fig::pdu_breakdown}.\\
+\\
+The function of most interest to you is called \mintinline{text}{sd_ble_gap_adv_data_set}. You are free to skip the Scan Response Packet, in which case you simply set \mintinline{text}{p_sr_data} to \mintinline{c}{NULL}, and \mintinline{text}{srdlen} to \mintinline{c}{0}.\\
+\\
+For a complete list of the AD Struct types that this SoftDevice supports, you may check out \mintinline{text}{Generic Access Profile (GAP)} $\rightarrow$ \mintinline{text}{Defines} $\rightarrow$ \mintinline{text}{GAP Advertising and Scan Response Data format}.
+
+\warning{If you are interested in using both a complete local name, as well as short local name, there is one caveat you need to be aware of: A short local name must be a continuous subset of the complete local name, starting at the beginning of the complete name - as per the Bluetooth Core Specification Supplement version 7. No worries, it took me ages to figure out as well.}
+
+\subsubsection{Start advertising}
+After you have set the advertising data, you need to activate advertising. Check out the documentation for \mintinline{text}{sd_ble_gap_adv_start}. Note that this function call takes a pointer to a \mintinline{text}{ble_gap_adv_params_t} struct.\\
+\\
+To get the fields of this struct, follow the link in the documentation of the \mintinline{text}{sd_ble_gap_adv_start} function. New tabs for each link you have to follow is advisable, but remember to close the ones you no longer need - otherwise you \textit{will} be overrun with information quickly.\\
+\\
+Hint: Only the fields \mintinline{text}{type} and \mintinline{text}{interval} are of particular interest, while the rest of the struct can be all zeros. A neat way to do this without manually setting each field is using the \mintinline{c}{memset} function, provided by \mintinline{c}{<string.h>}:
+
+\begin{minted}{c}
+ble_gap_adv_params_t adv_params;
+memset(&adv_params, 0, sizeof(adv_params));
+// Then set only the interesting fields
+\end{minted}
+To get the documentation for \mintinline{c}{memset}, you may call \mintinline{text}{man 3 memset} in a terminal, but the long and short of it is this: Fill \mintinline{c}{sizeof(adv_params)} number of bytes with all zeros, starting at the address of \mintinline{text}{adv_params}.\\
+\\
+You stand free to choose the advertising type, but you are most likely interested in using \mintinline{text}{BLE_GAP_ADV_TYPE_ADV_IND}. You can find a complete list of advertising types under \mintinline{text}{Generic Access Profile (GAP)} $\rightarrow$ \mintinline{text}{Defines} $\rightarrow$ \mintinline{text}{GAP Advertising types}.
+
+\subsection{Print to check your code}
+All the SoftDevice calls will return 0 (which is the value of\mintinline{text}{NRF_SUCCESS}) upon successful execution. You can print this over UART to the computer by using the provided \mintinline{text}{ubit_uart_print} function - which works the same way \mintinline{text}{printf} does, except that \mintinline{text}{ubit_uart_print} only accepts integers. An example invocation looks like this:
+\begin{minted}{c}
+ubit_uart_init(); // Call once
+ubit_uart_print("My favorite number is %d\n\r", 2);
+\end{minted}
+To read the micro:bit UART output, you may use any serial terminal program that you choose, with the baudrate 9600. The micro:bit will most likely mount as \mintinline{text}{/dev/ttyACM0}. An example using the \mintinline{text}{picocom} program looks like this:
+\begin{minted}{text}
+picocom -b 9600 /dev/ttyACM0
+\end{minted}
+\warning{If you have any other USB UART interfaces connected to the computer, the micro:bit may mount as \mintinline{text}{/dev/ttyACM1} instead. You can call \mintinline{text}{dmesg --follow} and then connect the micro:bit if you want to be sure where it mounts.}
+
+\subsubsection{Check with your phone}
+If your program compiles and runs, you may check with your phone to see if there is anything on the air. Use the nRF Connect app and start scanning. Your micro:bit should now broadcast its name, along with any other AD Structs that you might have included.\\
+\\
+If you made it, take a moment to savor your victory; writing Bluetooth Low Energy firmware is not a trivial task ;)\\
+\\
+Note that if you try to connect to your micro:bit at this point, you will be met with very anticlimactic behavior: The default when a device is attempted connected to, is to stop advertising. However, since we have not implemented any connection acceptance yet, the device will simply turn off advertising and then idle - and then your phone will time out.\\
+\\
+Finally, you might have noticed that the nRF Connect app reports a different advertising interval than you specified. For example, if you chose 80 ms in your code, you will typically see an actual advertising interval of around 85 ms. This is because the Bluetooth spec will add a random delay to the specified interval, in order to reduce the likelihood of packet collisions.
+
+
 
 
 \newpage
