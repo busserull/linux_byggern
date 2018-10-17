@@ -1,30 +1,26 @@
 #include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 #include "ubit.h"
 
-/* #include "ble.h" */
+#include "bluetooth.h"
+
+#include "ble_gap.h"
 
 int main(){
-	/* uint32_t err_code = 0; */
-
-	/* sd_softdevice_enable(NULL, NULL); */
-
 	ubit_uart_init();
-	ubit_led_matrix_init();
-	ubit_buttons_init();
 
-	int button_counter = 0;
+	uint32_t err_code = 0;
+
+	err_code = bluetooth_init();
+	ubit_uart_print("BLE Enable error code: %d\n\r", err_code);
+
+
+	bluetooth_gap_advertise_start();
 
 	while(1){
-		if(ubit_button_press_a()){
-			ubit_led_matrix_turn_on();
-			button_counter++;
-		}
-		else if(ubit_button_press_b()){
-			ubit_led_matrix_turn_off();
-			button_counter--;
-		}
-
-		ubit_uart_print("Button counter: %6d\n\r", button_counter);
+		int delay = 10000;
+		while(--delay);
 	}
 
 	return 0;
