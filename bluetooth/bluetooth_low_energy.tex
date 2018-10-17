@@ -256,7 +256,7 @@ To read the micro:bit UART output, you may use any serial terminal program that 
 \begin{minted}{text}
 picocom -b 9600 /dev/ttyACM0
 \end{minted}
-\warning{If you have any other USB UART interfaces connected to the computer, the micro:bit may mount as \mintinline{text}{/dev/ttyACM1} instead. You can call \mintinline{text}{dmesg --follow} and then connect the micro:bit if you want to be sure where it mounts.}
+\warning{If you have any other USB UART interfaces connected to the computer, the micro:bit may mount as \mintinline{text}{/dev/ttyACM1} instead. You can call \mintinline{text}{dmesg --follow} and then connect the micro:bit if you want to know for sure where it mounts.}
 
 \subsubsection{Check with your phone}
 If your program compiles and runs, you may check with your phone to see if there is anything on the air. Use the nRF Connect app and start scanning. Your micro:bit should now broadcast its name, along with any other AD Structs that you might have included.\\
