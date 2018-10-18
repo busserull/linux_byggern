@@ -260,7 +260,7 @@ picocom -b 9600 /dev/ttyACM0
 \end{minted}
 \warning{If you have any other USB UART interfaces connected to the computer, the micro:bit may mount as \mintinline{text}{/dev/ttyACM1} instead. You can call \mintinline{text}{dmesg --follow} and then connect the micro:bit if you want to know for sure where it mounts.}
 
-\subsubsection{Check with your phone}
+\subsection{Check with your phone}
 If your program compiles and runs, you may check with your phone to see if there is anything on the air. Use the nRF Connect app and start scanning. Your micro:bit should now broadcast its name, along with any other AD Structs that you might have included.\\
 \\
 If you made it, take a moment to savor your victory; writing Bluetooth Low Energy firmware is not a trivial task ;)\\
@@ -268,6 +268,46 @@ If you made it, take a moment to savor your victory; writing Bluetooth Low Energ
 Note that if you try to connect to your micro:bit at this point, you will be met with very anticlimactic behavior: The default when a device is attempted connected to, is to stop advertising. However, since we have not implemented any connection acceptance yet, the device will simply turn off advertising and then idle - and then your phone will time out.\\
 \\
 Finally, you might have noticed that the nRF Connect app reports a different advertising interval than you specified. For example, if you chose 80 ms in your code, you will typically see an actual advertising interval of around 85 ms. This is because the Bluetooth spec will add a random delay to the specified interval, in order to reduce the likelihood of packet collisions.
+
+\section{Get your game on - GATT}
+GAP is cool and all, but the real workhorse of Bluetooth is the GATT; the \textit{Generic Attribute Profile}. Unlike the GAP, which only deals with details regarding interactions between devices, the GATT deals with data transfer.\\
+\\
+Since Bluetooth 4.1, it became possible to use the mysterious L2CAP (\textit{Logical Link Controller and Adaptation Protocol}) for higher throughput connection-oriented data transfer channels. Thus, you \textit{could} use this layer for your data transfer directly. Nevertheless, at the time of writing, Bluetooth data transfer seems synonymous with GATT usage in some shape or form.
+\todo{Add stack figure}\\
+\\
+It is perfectly normal to be confused about GAP and GATT at this point, but the essence is this: GAP takes care of advertising, connections and security. GATT is a \textit{profile} that uses a \textit{protocol} named ATT (Attribute Protocol). Through a set of black magic, the GATT uses the ATT to provide a means for data transfer.
+
+\subsection{Protocols and Profiles}
+It is useful to have at least a high-level understanding of what the Bluetooth spec talks about when it discusses protocols and profiles. Still, a deep knowledge about these things should not be necessary to use Bluetooth Low Energy, so please do not fret if some of the concepts remain fuzzy.
+
+\subsubsection{Protocols}
+In Bluetooth, a \textit{protocol} is a layer that implements low-level details like packet formatting, routing, encoding, multiplexing, and some interface that allows data to be sent between peers.\\
+\\
+The ATT (Attribute protocol) is an example of a protocol. The ATT does not have that much to it; it is merely a simple client-server stateless way to exchange data, presented as so-called "attributes". A Bluetooth device can be either a client, a server, or both - regardless of whether it is a master or a slave.\\
+\\
+Inside the ATT, you find a set of attributes. Each attribute is a collection of four components:
+\begin{enumerate}
+\item A 16-bit attribute handle.
+\item A number known as a Universally Unique Identifier (UUID).
+\item A set of read- and write permissions.
+\item The value, or the real data of the attribute.
+\end{enumerate}
+Each time a client wants to read- or write an attribute value, it issues a request to the ATT server. The server must then fully process this single request, before tending to any other requests.\\
+\\
+When a client accesses an attribute, it uses the 16-bit attribute handle to identify which attribute it is trying to access. The UUID is a 128-bit (16 byte) number that describes the type or nature of the attribute data. When reading, the serves does minimal checking; the client is responsible for interpreting and understanding the supplied data. This is unlike a write operation - which the server is free to reject if the client data does not fit the expected format.
+
+\subsubsection{Profiles}
+A \textit{profile} is a recipe for how to use one or more protocols to serve a certain purpose, and achieve a particular goal. An example of such a profile is the GATT, or the Generic Attribute Profile.\\
+\\
+The GATT heavily relies on the ATT, but to further convolute matters more, the GATT introduces some new concepts and terminology. The most important difference the GATT introduces is data organization. In GATT, data is ordered in a hierarchy of so-called \textit{services}. A service is a collection of \textit{characteristics}, and a set of relationships to other services. Characteristics are just conceptually similar pieces of data grouped together.\\
+\\
+If you have a background in object-oriented programming, it might be helpful to think of services as \textit{classes}, and characteristics as \textit{member variables}.
+\todo{Add figure}
+\\
+\\
+\warning{The Bluetooth spec might have gone a \textit{little} overboard with all the abbreviations. Remember to breathe with the stomach as you take it all in.}
+
+\subsection{•}
 
 
 
