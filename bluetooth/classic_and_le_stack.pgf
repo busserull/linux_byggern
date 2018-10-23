@@ -1,0 +1,21 @@
+﻿\begin{tikzpicture}[yscale=0.8]
+\usetikzlibrary{decorations.pathreplacing}
+
+\draw[thick] (0,0) rectangle ++(4,1) node[midway] {BR/EDR PHY};
+\draw[thick] (0,1.5) rectangle ++(4,1) node[midway] {Link Manager};
+\draw[thick] (0,3) rectangle ++(4,1) node[midway] {L2CAP};
+\draw[thick] (0,4.5) rectangle ++(4,1) node[midway] {RFCOMM};
+\draw[thick] (0,6) rectangle ++(4,1) node[midway] {SPP};
+\draw[decorate,decoration={brace,amplitude=10pt},yshift=4pt] (0,7) -- ++(4,0) node[midway,above=10pt] {\Large Classic};
+
+\begin{scope}[xshift=6cm]
+\draw[thick] (0,0) rectangle ++(4,1) node[midway] {LE PHY};
+\draw[thick] (0,1.5) rectangle ++(4,1) node[midway] {Link Layer};
+\draw[thick] (0,3) rectangle ++(4,1) node[midway] {L2CAP};
+\draw[thick] (0,4.5) rectangle ++(1.8,1) node[midway] {SMP};
+\draw[thick] (4,4.5) rectangle ++(-1.8,1) node[midway] {ATT};
+\draw[thick] (0,6) rectangle ++(1.8,1) node[midway] {GAP};
+\draw[thick] (4,6) rectangle ++(-1.8,1) node[midway] {GATT};
+\draw[decorate,decoration={brace,amplitude=10pt},yshift=4pt] (0,7) -- ++(4,0) node[midway,above=10pt] {\Large Low Energy};
+\end{scope}
+\end{tikzpicture}

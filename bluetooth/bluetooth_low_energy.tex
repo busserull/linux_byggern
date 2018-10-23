@@ -5,6 +5,8 @@
 \usepackage{tikz}
 \usepackage{graphicx}
 
+\usetikzlibrary{decorations.pathreplacing}
+
 \usepackage{todonotes}
 
 \setmintedinline{breaklines}
@@ -48,13 +50,13 @@
 \section{Introduction}
 Wired protocols are all well and nice - and although CAN is a relatively old protocol now partly superseded by CAN FD (ISO 11898); it is still widely used today. Nevertheless, wireless protocols are becoming increasingly popular wherever they can be used, due to their low cost, and ease of use.\\
 \\
-One such protocol - Bluetooth Low Energy, or Bluetooth 4.2 (BLE for short) - is almost certainly supported by your smart phone; as well as a plethora of different devices, prevalent in daily life. This makes it an ideal candidate for introducing wireless connectivity to your project - provided you can live with the loads of interference present in the 2.4 GHz ISM band.\\
+One such protocol - Bluetooth 4.2, or Bluetooth Low Energy (BLE for short), is almost certainly supported by your smart phone; as well as a plethora of different devices that we interact with daily. This makes it an ideal candidate for introducing wireless connectivity to your project - of course provided you can live with the interference present in the 2.4 GHz ISM band.\\
 \\
-Many of the students taking this course will previously have had the course "Embedded Systems" (TTK4235), in which the "BBC micro:bit" development board was used during the labs. This is an excellent platform for introducing the Bluetooth Low Energy stack, and we will be using the micro:bit platform in this course as well. TTK4235 is no prerequisite, and it should be straight forward to follow this lab assignment without having gone through that course.\\
+Many of the students taking this course will previously have had the course "Embedded Systems" (TTK4235), in which the \textit{micro:bit} development board was used during the labs. This is an excellent platform for introducing the Bluetooth Low Energy stack, and we will be using the micro:bit platform in this course as well. TTK4235 is no prerequisite, and it should be straight forward to follow this lab assignment without having gone through that course.\\
 \\
-If no one on your group has a micro:bit, you may talk to one of the student assistants. It is also possible to use other hardware, such as an nRF52 development kit if you happen to have one, but bear in mind that other hardware platforms support different Application Programming Interfaces (APIs) for the Bluetooth stack.\\
+If no one on your group has a micro:bit, you may talk to one of the student assistants. It is also possible to use other hardware, such as an nRF52DK if you happen to have one, but bear in mind that other hardware platforms support different Application Programming Interfaces (APIs) for the Bluetooth stack.\\
 \\
-This assignment was written- and tested on Linux. It should be relatively straight forward to follow along with other platform using the GNU toolchain as well, but keep in mind that you are more on your own in that case.
+This assignment was developed on Linux. It should be relatively straight forward to follow along with other platforms using the GNU toolchain as well, but keep in mind that you will be slightly more on your own in that case.
 
 \newpage
 \noindent
@@ -272,8 +274,7 @@ Finally, you might have noticed that the nRF Connect app reports a different adv
 \section{Get your game on - GATT}
 GAP is cool and all, but the real workhorse of Bluetooth is the GATT; the \textit{Generic Attribute Profile}. Unlike the GAP, which only deals with details regarding interactions between devices, the GATT deals with data transfer.\\
 \\
-Since Bluetooth 4.1, it became possible to use the mysterious L2CAP (\textit{Logical Link Controller and Adaptation Protocol}) for higher throughput connection-oriented data transfer channels. Thus, you \textit{could} use this layer for your data transfer directly. Nevertheless, at the time of writing, Bluetooth data transfer seems synonymous with GATT usage in some shape or form.
-\todo{Add stack figure}\\
+Since Bluetooth 4.1, it became possible to use the mysterious L2CAP (the \textit{Logical Link Controller and Adaptation Protocol}) for higher throughput connection-oriented data transfer channels. Thus, you \textit{could} use this layer for your data transfer directly. Nevertheless, at the time of writing, Bluetooth data transfer seems synonymous with GATT usage in some shape or form. For those interested, the Bluetooth Low Energy layers are illustrated in figure \ref{fig::bluetooth_stack_differences}.\\
 \\
 It is perfectly normal to be confused about GAP and GATT at this point, but the essence is this: GAP takes care of advertising, connections and security. GATT is a \textit{profile} that uses a \textit{protocol} named ATT (Attribute Protocol). Through a set of black magic, the GATT uses the ATT to provide a means for data transfer.
 
@@ -345,7 +346,6 @@ Since we will be implementing a single service with a single characteristic, we 
 #define CUSTOM_UUID_SERVICE_UBIT 0xdead
 #define CUSTOM_UUID_CHAR_MATRIX 0xbabe
 \end{minted}
-\todo{Change these values?}
 Since we are using "vendor specific" UUIDs, the actual values of the modifiers \mintinline{text}{CUSTOM_UUID_SERVICE_UBIT} and \mintinline{text}{CUSTOM_UUID_CHAR_MATRIX} are not important, and you are free to set them to any 16-bit number of your liking, as long as they are not identical.\\
 \\
 Now that we have decided what our UUIDs, will be, we must also tell this to the SoftDevice. In \mintinline{c}{bluetooth_gatts_start()}, you do this by running the following code:
@@ -493,22 +493,123 @@ Since we have two buttons on the micro:bit, it makes sense to use an array of tw
 static uint8_t m_button_press_a_b[2] = {0, 0};
 static uint8_t m_button_press_a_b_previous[2] = {0, 0};
 \end{minted}
-This is analogous to our \mintinline{c}{static uint8_t m_matrix_attr_value} from earlier. The reason we create two copies, is so we can notify the phone only when the button states update. This way, we do not needlessly transmit the button states unless they have changed since the last time we transmitted.
+This is analogous to our \mintinline{c}{static uint8_t m_matrix_attr_value} from earlier. The reason we create two copies, is so we can notify the phone only when the button states update. This way, we do not needlessly transmit the button states unless they have changed since the last time we transmitted.\\
+\\
+Adding the rest of the characteristic is similar to how we added the LED matrix characteristic, with some minor tweaks. The most obvious is that we do not want to make the attribute writable, so the attribute metadata will look like this instead:
+\begin{minted}{c}
+ble_gatts_attr_md_t button_attr_md;
+memset(&button_attr_md, 0, sizeof(button_attr_md));
+button_attr_md.vloc = BLE_GATTS_VLOC_USER;
+button_attr_md.read_perm.sm = 1;
+button_attr_md.read_perm.lv = 1;
+\end{minted}
+Next, we have to make sure the characteristic metadata matches the attribute metadata. There is one catch though; since the client (the phone) should be able to subscribe and unsubscribe to notifications, we need another piece of metadata describing whether the client wants notifications or not. This is stored in the Client Characteristic Configuration Descriptor, or the aptly named CCCD. The Bluetooth Special Interest Group dodged a bullet by not naming it the Client Characteristic Configuration Property.\\
+\\
+This descriptor is managed by the SoftDevice, so we should allocate it to the stack, rather than to user memory. After that, we need to tell the characteristic metadata to use the CCCD. Do not lose hope if this sounds like made-up gibberish; it should look like this:
+\begin{minted}{c}
+ble_gatts_attr_md_t button_cccd_md;
+memset(&button_cccd_md, 0, sizeof(button_cccd_md));
+button_cccd_md.vloc = BLE_GATTS_VLOC_STACK;
+button_cccd_md.read_perm.lv = 1;
+button_cccd_md.read_perm.sm = 1;
+button_cccd_md.write_perm.lv = 1;
+button_cccd_md.write_perm.sm = 1;
+
+static uint8_t button_char_desc[] = {
+	'B', 'u', 't', 't', 'o', 'n', 's'
+};
+ble_gatts_char_md_t button_char_md;
+memset(&button_char_md, 0, sizeof(button_char_md));
+button_char_md.char_props.read = 1;
+button_char_md.char_props.notify = 1;
+button_char_md.p_char_user_desc = button_char_desc;
+button_char_md.char_user_desc_max_size = 7;
+button_char_md.char_user_desc_size = 7;
+button_char_md.p_cccd_md = &button_cccd_md;
+\end{minted}
+If you fill out the rest of the characteristic, and then add it to the SoftDevice by calling \mintinline{text}{sd_ble_gatts_characteristic_add}, you will see a new characteristic when you connect to the micro:bit (you might have to go to settings and "Refresh services" in the nRF Connect app). Still, the characteristic will not do anything, since we never update the button attribute value. This is next on our list.
+
+\subsubsection{Updating the client}
+To send notifications, we need to use the function \mintinline{text}{sd_ble_gatts_hvx}. HVX stands for "Handle Value X". I think we can all agree that the price for best function name does not go to \mintinline{text}{sd_ble_gatts_hvx}. Either way, here you can see an example invocation that transmits the state of our buttons:
+\begin{minted}{c}
+if(m_service_ubit.conn_handle != BLE_CONN_HANDLE_INVALID){
+	uint16_t notification_length = 2;
+	
+	ble_gatts_hvx_params_t hvx_params;
+	memset(&hvx_params, 0, sizeof(hvx_params));
+	hvx_params.handle = m_service_ubit.button_handles.value_handle;
+	hvx_params.type = BLE_GATT_HVX_NOTIFICATION;
+	hvx_params.p_len = &notification_length;
+	hvx_params.p_data = m_button_press_a_b;
+	
+	sd_ble_gatts_hvx(
+		m_service_ubit.conn_handle,
+		&hvx_params
+	);
+}
+\end{minted}
+You would call this at the bottom of the infinite loop in \mintinline{text}{bluetooth_serve_forever}. Transmitting only when the button state has changed is simply a matter of comparing \mintinline{text}{m_button_press_a_b} and \mintinline{text}{m_button_press_a_b_previous}. This is up to you.\\
+\\
+If you implement all this, you have essentially replicated the example program that was handed out, congratulations!
+
+\subsection{Interfacing to the rest of the project}
+When interfacing with the rest of your project, there is several ways to approach the problem. The two ways that I find most obvious are described here.
+
+\subsubsection{Direct connection}
+When interfacing with the rest of your project, there is several ways to approach the problem. The micro:bit supports both SPI and I$^2$C (aka TWI), as well as UART. It is thus possible to connect the micro:bit to either node 1 or node 2, and interface it using one of the above protocols.\\
+\\
+\warning{The micro:bit runs on 3.3V, while the rest of the project runs on 5V. Get a logic level converter, or a set of high frequency optocouplers if you want to follow this approach.}\\
+\\
+This would also require you to write your own SPI or I$^2$C drivers. For those of you who have taken TTK4235, this should be a cake walk.
+
+\subsubsection{Indirect connection}
+Another approach is to simply use the host computer as a middle man. You may then use the micro:bit to communicate with the computer, which will in turn communicate with one of the nodes in your project.\\
+\\
+This would require you to extend the UART driver for the micro:bit to also support receiving messages, as the driver handed out is only unidirectional. It would also require you to write a bridging program running on the computer. This bridging program simply has to forward messages between two serial ports. Considering the myriad of serial libraries out there, this task should be dirt simple - for example pySerial for Python, Nerves for Elixir, SerialPort for Ruby, etc.
+
+\subsubsection{Conclusion}
+If you want to interface the micro:bit with the rest of your project using either of these methods, the amount of work should roughly be the same.\\
+\\
+Using a direct connection removes the need for a man-in-the-middle, but it places more emphasis on hardware, as you have to correctly convert the logical levels in order to not damage the micro:bit.\\
+\\
+Using the computer as a middle man, there is no extra hardware requirements at all, and the problem is reduced to "simply" writing correct code. In conclusion, it depends on what you are most comfortable working with ;)
 
 \newpage
 \noindent
 \appendix
 \section{Introduction to BLE}
 \label{app::intro_ble}
-\begin{figure}
+Bluetooth Low Energy, or Bluetooth 4.2 is a version of Bluetooth specifically tailored toward low energy applications, as the name suggests. The first version of BLE (Bluetooth 4.0) saw the light of day in 2010, and since then, BLE has had an adoption rate unparalleled by most other technologies. The most influential factor is likely the cellphone market, helped along by the kin of Samsung and Apple. In addition to this, BLE allows for anyone who wants to use it to tweak it their purposes, while still being able to take advantage of the BLE framework. This is in contrast to Bluetooth Classic, which is only focused on a narrow set of pre-defined use cases.\\
+\\
+Interestingly, in the pursuit of lower power consumption, BLE has scaled back on the punch it packs in terms of data throughput. While you should be comfortably able to listen to music over Bluetooth Classic, this is in reality close to impossible over Bluetooth Low Energy.\\
+\\
+Even though the radio modulation rate of BLE is 1 Mbps, the protocol itself introduces a lot of overhead. In our case, the nRF51822 can transmit up to 6 data packets par \textit{connection interval} - where a connection interval is simply one data exchange between two devices. Each data packet can contain up to 20 user defined bytes. The shortest possible connection interval is 7.5 ms, and so we are already at a theoretical upper limit of
+$$\frac{6 \cdot 20 \cdot 8\ \mathrm{bits}}{7.5\ \mathrm{ms}} = 128\ \mathrm{kbit}/\mathrm{s}$$
+Add to that the fact that Bluetooth Low Energy will always try to retransmit lost packages, collisions might happen, the radio might be busy, as so on and so forth. In practice, you can expect to see around 40-80 kbps. This is pretty unimpressive in term of raw data throughput, but Bluetooth Low Energy still shines in what it was intended to be good at, namely low power consumption in resource constrained environments.\\
+\\
+From a technical point of view, the Bluetooth stack itself has changed over the years. So much so that a Bluetooth Classic cannot talk directly to Bluetooth Low Energy. The different layers of the Bluetooth Classic and Bluetooth Low Energy stacks are illustrated in figure \ref{fig::bluetooth_stack_differences}. Bluetooth Classic is also often called "BR/EDR", which stands for "Basic Rate/Enhanced Data Rate".\\
+\\
+\begin{figure}[hbt]
+\centering
+\input{classic_and_le_stack.pgf}
+\caption{Bluetooth Classic stack and Bluetooth Low Energy stack.}
+\label{fig::bluetooth_stack_differences}
+\end{figure}
+In addition to the stack differences in Bluetooth Classic and Bluetooth Low Energy, the two standards also do radio operation differently. Bluetooth Classic segments the 2.4 GHz ISM band into 79 channels that it uses. Bluetooth Low Energy splits the same band into only 40 channels, as illustrated in figure \ref{fig::bluetooth_spectrum}. Bluetooth Low Energy uses the channels 37, 38, and 39 exclusively for advertising, and the remaining channels for data transmission.\\
+\\
+In essence, it is instructive to think of Bluetooth Classic and Bluetooth Low Energy as completely different technologies, merely sharing the same brand name. Even so, there exists \textit{dual mode} Bluetooth devices, that can operate on both Bluetooth Classic, as well as Bluetooth Low Energy. This is the technology you will find in most phones.
+\begin{figure}[hb]
 \centering
 \resizebox{\linewidth}{!}{
 \input{channel_spectrum.pgf}
 }
 \caption{The Bluetooth channel spectrum.}
 \label{fig::bluetooth_spectrum}
-\end{figure}
-Blah blah
-
+\end{figure}\\
+When it comes to network topology, the Bluetooth Low Energy standard is quite permissive in what it allows you to do. It is possible to simply broadcast to the surrounding world on some, or all, of the three advertising channels - this allows a device to send information to several other devices at the same time. However, it does have limitations; the information exchange is unidirectional only, so a broadcasting device cannot get anything in return.\\
+\\
+For fancier things, where you require more than just the capability to spew out advertising packets, there are \textit{connections}. In Bluetooth Low Energy, a connection is a periodic data exchange between \textit{one} central, and \textit{one} peripheral. It is not possible to send to two or more devices at the same time. Still, since Bluetooth 4.1, one physical device can don any combination of roles and connections it wants to. Thus, you can be a central and a peripheral at the same time. These \textit{instances} of centrals or peripherals are then free to connect to other centrals or peripherals.\\
+\\
+An important concept in Bluetooth Low Energy is the Generic Attribute Profile, or GATT for short. This is the workhorse behind virtually every BLE data transaction, and is what allows the standard to be so versatile. In essence, the GATT is simply a server-client type of service provided by Bluetooth, that allows for a standard way of organizing and accessing data.
 
 \end{document}
