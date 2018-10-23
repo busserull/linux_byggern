@@ -1,0 +1,31 @@
+﻿\begin{tikzpicture}
+
+\draw[thick] (-0.5,-0.5) rectangle ++(9.5,6.5);
+\path (0,6) rectangle ++(3,-1) node[midway] {\large GATT Server};
+
+
+\draw (0,0) rectangle ++(4, 5);
+\path (0.5,5) rectangle ++(3,-1) node[midway,left] {Service};
+
+\draw (0.5,0.5) rectangle ++(3,1.5);
+\path (0.5, 2) rectangle ++(3,-0.75) node[midway] {Characteristic};
+\path (0.5, 0.5) rectangle ++(3,0.75) node[midway] {\scriptsize(Descriptor)};
+
+\begin{scope}[yshift=2cm]
+\draw (0.5,0.5) rectangle ++(3,1.5);
+\path (0.5, 2) rectangle ++(3,-0.75) node[midway] {Characteristic};
+\path (0.5, 0.5) rectangle ++(3,0.75) node[midway] {\scriptsize(Descriptor)};
+\end{scope}
+
+\begin{scope}[xshift=4.5cm]
+\draw (0,0) rectangle ++(4, 5);
+\path (0.5,5) rectangle ++(3,-1) node[midway,left] {Service};
+
+\begin{scope}[yshift=2cm]
+\draw (0.5,0.5) rectangle ++(3,1.5);
+\path (0.5, 2) rectangle ++(3,-0.75) node[midway] {Characteristic};
+\path (0.5, 0.5) rectangle ++(3,0.75) node[midway] {\scriptsize(Descriptor)};
+\end{scope}
+\end{scope}
+
+\end{tikzpicture}

@@ -116,7 +116,7 @@ The "Buttons" characteristic contains the state of the two micro:bit tactile but
 \begin{minipage}{0.5\linewidth}
 \centering
 \includegraphics[width=0.9\linewidth]{example_connect_scan.png}
-\caption{nRF Connect scanning.}
+\caption{nRF Connect scan.}
 \label{fig::example_scanning}
 \end{minipage}%
 \begin{minipage}{0.5\linewidth}
@@ -299,18 +299,201 @@ When a client accesses an attribute, it uses the 16-bit attribute handle to iden
 \subsubsection{Profiles}
 A \textit{profile} is a recipe for how to use one or more protocols to serve a certain purpose, and achieve a particular goal. An example of such a profile is the GATT, or the Generic Attribute Profile.\\
 \\
-The GATT heavily relies on the ATT, but to further convolute matters more, the GATT introduces some new concepts and terminology. The most important difference the GATT introduces is data organization. In GATT, data is ordered in a hierarchy of so-called \textit{services}. A service is a collection of \textit{characteristics}, and a set of relationships to other services. Characteristics are just conceptually similar pieces of data grouped together.\\
+The GATT heavily relies on the ATT, but to further convolute matters more, the GATT introduces some new concepts and terminology. The most important difference the GATT introduces is data organization. In GATT, data is ordered in a hierarchy of so-called \textit{services}. A service is a collection of \textit{characteristics}, and a set of relationships to other services. Characteristics are just conceptually similar pieces of data grouped together. See figure \ref{fig::gatt_server_service_characteristic} for an illustration of this.
+\begin{figure}[h]
+\centering
+\input{gatt_server_service_characteristic.pgf}
+\caption{Conceptual illustration of a GATT server.}
+\label{fig::gatt_server_service_characteristic}
+\end{figure}
 \\
 If you have a background in object-oriented programming, it might be helpful to think of services as \textit{classes}, and characteristics as \textit{member variables}.
-\todo{Add figure}
 \\
 \\
 \warning{The Bluetooth spec might have gone a \textit{little} overboard with all the abbreviations. Remember to breathe with the stomach as you take it all in.}
 
-\subsection{•}
+\subsection{Create a Service}
+As you can probably guess from figure \ref{fig::gatt_server_service_characteristic}, the first thing we want to do to make GATT useful is to add a Service. Before we do this, we need to do some housekeeping; first off, include "\mintinline{text}{ble_gatts.h}". Secondly, we need to allocate some persistent memory that can keep track of our new service. We can do this by creating a \mintinline{c}{static} struct at the top of \mintinline{text}{bluetooth.c}, like so:
 
+\begin{minted}{c}
+static struct {
+	uint16_t conn_handle;
+	uint16_t service_handle;
+	ble_gatts_char_handles_t matrix_handles;
+} m_service_ubit;
+\end{minted}
+This struct might look cryptic, but it is merely a representation of a - "Service (\mintinline{c}{m_service_ubit}), which has a single "Characteristic" (\mintinline{c}{matrix_handles}). The reason for the \mintinline{text}{_m} prefix on \mintinline{c}{m_service_ubit} is simply to denote to ourselves that this variable is reachable in the whole \textbf{m}odule. Getting into the habit of using simple prefixes like this is a very neat way of doing some simple sanity checks .\\
+\\
+This is well and nice, but we still need to hold our horses a bit. Before we can actually add the service and characteristic, we need to give it some sort of ID, so the Bluetooth Stack knows how to address it. This is done by adding a new entry to the SoftDevice UUID table.
 
+\subsubsection{Add a Vendor Specific UUID}
+The Bluetooth spec defines a set of 16 bit UUIDs for the members of the Bluetooth Special Interest group, and some widely adopted services. Sadly, we are not on this list, so we need to create our own, longer, 128 bit UUID and use that instead.\\
+\\
+In a terminal, call \mintinline{text}{uuidgen}. You will get a random string of hexadecimal values, for example "\mintinline{text}{d8ff10af-2e1a-4bcf-b479-7f43a6995846}". This is now our base UUID, that we will supply to the SoftDevice.\\
+\\
+Since the \mintinline{text}{uuidgen} command yields a UUID in big endian, and the SoftDevice represents UUIDs in little endian, we technically have to enter our UUID in reverse. For the UUID above, you would enter this in \mintinline{text}{bluetooth.c}:
+\begin{minted}{c}
+#define CUSTOM_UUID_BASE {{\
+ 0x46, 0x58, 0x99, 0xa6, 0x43, 0x7f, 0x79, 0xb4,\
+ 0xcf, 0x4b, 0x1a, 0x2e, 0xaf, 0x10, 0xff, 0xd8\
+}}
+\end{minted}
+In this specific case, it would not matter if you entered the UUID the wrong way, since this would simply correspond to a different randomly generated UUID. However, it would matter if you were implementing a "known and registered" service, so it is good to get into the habit of doing it correctly.\\
+\\
+Since we will be implementing a single service with a single characteristic, we will need two more UUIDs after we have our base; one for the service, and one for the characteristic. Instead of specifying a full 128-bit UUID for these however, we simply need to supply two 16-bit "modifiers" to the base UUID. In this example, we are going to create a service called "\mintinline{text}{ubit}", with a characteristic called "\mintinline{text}{matrix}", so add the following to \mintinline{text}{bluetooth.c}:
+\begin{minted}{c}
+#define CUSTOM_UUID_SERVICE_UBIT 0xdead
+#define CUSTOM_UUID_CHAR_MATRIX 0xbabe
+\end{minted}
+\todo{Change these values?}
+Since we are using "vendor specific" UUIDs, the actual values of the modifiers \mintinline{text}{CUSTOM_UUID_SERVICE_UBIT} and \mintinline{text}{CUSTOM_UUID_CHAR_MATRIX} are not important, and you are free to set them to any 16-bit number of your liking, as long as they are not identical.\\
+\\
+Now that we have decided what our UUIDs, will be, we must also tell this to the SoftDevice. In \mintinline{c}{bluetooth_gatts_start()}, you do this by running the following code:
+\begin{minted}{c}
+ble_uuid128_t base_uuid = CUSTOM_UUID_BASE;
 
+ble_uuid_t ubit_service_uuid;
+ubit_service_uuid.uuid = CUSTOM_UUID_SERVICE_UBIT;
+
+err_code = sd_ble_uuid_vs_add(
+	&base_uuid,
+	&ubit_service_uuid.type
+);
+\end{minted}
+This is all well and fine. We have now added our own vendor specific service UUID to the SoftDevice UUID table. The only catch is of course that we have not added the actual service yet. No reason for despair though, we will do that next.
+
+\subsubsection{Add a Service to our UUID}
+We already have space for our service, namely \mintinline{c}{m_service_ubit}, that we declared earlier. Now we will tell the SoftDevice that this is what we intend to use for the service itself. Look into the \mintinline{c}{sd_ble_gatts_service_add} function, which you can find documentation for under \mintinline{text}{Generic Attribute Profile (GATT) Server} $\rightarrow$ \mintinline{text}{Functions}.\\
+\\
+The type of the service should be primary. The \mintinline{text}{p_uuid} parameter should be a pointer to our service UUID. Finally, the \mintinline{text}{p_handle} parameter should be a pointer to the \mintinline{text}{service_handle} member of \mintinline{text}{m_service_ubit}.\\
+\\
+It is probably smart to check that this call returns \mintinline{text}{NRF_SUCCESS} (defined to be 0) before moving on.
+
+\subsubsection{Add the Characteristic UUID}
+Now that we have added our service UUID and defined a handle for it, we need to populate that service with a characteristic. The first step is of course adding the UUID for our characteristic. This is done the same way as before:
+\begin{minted}{c}
+ble_uuid_t matrix_uuid;
+matrix_uuid.uuid = CUSTOM_UUID_CHAR_MATRIX;
+
+err_code = sd_ble_uuid_vs_add(
+	&base_uuid,
+	&matrix_uuid.type
+);
+\end{minted}
+
+\subsubsection{Add the Characteristic}
+A quick inventory check of what we have done so far: First off, we added our own vendor specific service UUID. Then we added the actual service to the SoftDevice. Now we have added a characteristic UUID to that service, but we have yet to add the "meat" of the characteristic itself. This is done by using the \mintinline{text}{sd_ble_gatts_characteristic_add} function, so if you are feeling adventurous, feel free to just read the documentation for that call and get going. Otherwise, read on.\\
+\\
+\warning{The upcoming steps will probably seem completely arbitrary unless you have used a similar API before. Trust me, after a few times it starts making sense :)}\\
+\\
+A characteristic consists of zero or more \textit{descriptors}, a set of \textit{characteristic metadata}, and some \textit{attribute metadata}. You can be pretty sure we have to deal with all of these. It is very easy to get lost in the process of setting this up, so I will not force you to do it completely on your own - still, you are encouraged to check out the documentation and try to understand what we are doing as you follow along.\\
+\\
+First, we are going to set up the characteristic metadata, as such:
+\begin{minted}{c}
+static uint8_t matrix_char_desc[] = {
+	'L', 'E', 'D', ' ', 'M', 'a', 't', 'r', 'i', 'x'
+};
+ble_gatts_char_md_t matrix_char_md;
+memset(&matrix_char_md, 0, sizeof(matrix_char_md));
+matrix_char_md.char_props.read = 1;
+matrix_char_md.char_props.write = 1;
+matrix_char_md.p_char_user_desc = matrix_char_desc;
+matrix_char_md.char_user_desc_max_size = 10;
+matrix_char_md.char_user_desc_size = 10;
+\end{minted}
+You can probably interpret most of this yourself. We create a characteristic that is both read- and writable. Then we describe the characteristic by adding the descriptor "\mintinline{text}{LED Matrix}", which is a UTF-8 encoded string that is not null-terminated. Since the string should not be terminated by a \mintinline{text}{NULL}, we have to supply the SoftDevice with the length of the descriptor as well. Some descriptors are allowed to be changed during operation, so we also supply a max length. In this case, we do not want the descriptor to be mutable, so we leave the \textit{descriptor metadata} (\mintinline{text}{p_user_desc_md}) unset. You can see the documentation for the whole characteristic metadata struct by going to \mintinline{text}{Generic Attribute Profile (GATT) Server} $\rightarrow$ \mintinline{text}{Structures} $\rightarrow$ \mintinline{text}{ble_gatts_char_md_t}.\\
+\\
+Next up is making the attribute that our characteristic will refer to. Remember that GATT uses ATT behind the scenes, so it probably does not come as a surprise that we have to set some attribute metadata as well:
+\begin{minted}{c}
+ble_gatts_attr_md_t matrix_attr_md;
+memset(&matrix_attr_md, 0, sizeof(matrix_attr_md));
+matrix_attr_md.read_perm.lv = 1;
+matrix_attr_md.read_perm.sm = 1;
+matrix_attr_md.write_perm.lv = 1;
+matrix_attr_md.write_perm.sm = 1;
+matrix_attr_md.vloc = BLE_GATTS_VLOC_USER;
+\end{minted}
+Here, we are specifying the access restrictions to our attribute in the ATT server. The magic values for \mintinline{text}{lv} and \mintinline{text}{sm} set the \textit{Security Mode} and \textit{Level} of authentication needed to modify the attribute. When both are 1, we have an open link, so no security is needed. Even though this assignment will not touch on the security aspects of Bluetooth Low Energy, the Bluetooth spec boasts an impressive set of security considerations, like signing, encryption, and man-in-the-middle-attack protection.\\
+In addition to setting the access restrictions for our attribute, we also tell the SoftDevice where the attribute value resides, that is, the \textbf{v}alue \textbf{loc}ation of the attribute. The value \mintinline{text}{BLE_GATTS_VLOC_USER} means that the user (us) is responsible for ensuring that the attribute value is always stored in a valid location throughout the entire lifetime of the attribute. We will tend to this next.\\
+\\
+Finally, we can create the attribute value. This needs to be reachable in the entire module, so add \mintinline{c}{static uint8_t m_matrix_attr_value = 0;} to the top of \mintinline{text}{bluetooth.c}. After that, we simply have to put this value and the metadata variables together, like so:
+\begin{minted}{c}
+ble_gatts_attr_t matrix_attr;
+memset(&matrix_attr, 0, sizeof(matrix_attr));
+matrix_attr.p_uuid = &matrix_uuid;
+matrix_attr.p_attr_md = &matrix_attr_md;
+matrix_attr.init_len = 1;
+matrix_attr.max_len = 1;
+matrix_attr.p_value = &m_matrix_attr_value;
+\end{minted}
+And then, to register our beautiful creation with our SoftDevice overlord, we call \mintinline{text}{sd_ble_gatts_characteristic_add}:
+\begin{minted}{c}
+err_code = sd_ble_gatts_characteristic_add(
+	m_service_ubit.service_handle,
+	&matrix_char_md,
+	&matrix_attr,
+	&m_service_ubit.matrix_handles
+);
+\end{minted}
+Congratulations, your Bluetooth application is now approximately 100\% cooler than before. However, it is still not connectable. We need to fix that, so read on.
+
+\section{Serve connections}
+We are nearly there. All that remains is to react to \textit{connection events} and update the \textit{connection handle} in out service. In the general case, you have to set up an event buffer, fill it up with incoming events, and process each of them in order.\\
+\\
+In your case, this is already done for you. At the bottom of your \mintinline{text}{main} function, simply call \mintinline{text}{bluetooth_serve_forever()}.\\
+\\
+If you inspect that function, you will see that all it essentially does, is listen for \mintinline{text}{BLE_GAP_EVT_CONNECTED} and \mintinline{text}{BLE_GAP_EVT_DISCONNECTED}. You can probably guess that these signify connection requests and disconnects through GAP. When these happen, we update the connection handle in our service accordingly.\\
+\\
+In addition to this, the infinite loop in \mintinline{text}{bluetooth_serve_forever} sets and clears the LED matrix on the micro:bit according to the value of our characteristic.\\
+\\
+\warning{Do not forget to initialize the LED matrix before calling \mintinline{text}{bluetooth_serve_forever}. Find an appropriate place to call the init function.}
+
+\section{Instant gratification}
+You may now compile and flash your code. On your phone, you should now see something similar to figure \ref{fig::exercise_scanning} when you scan. If you try to connect, you should get something akin to figure \ref{fig::exercise_service}. Note that we are able to use Unicode letters (encoded as UTF-8) in the GAP advertising packet, as seen in figure \ref{fig::exercise_scanning} with the umlaut \textit{ü}. Even so, the nRF Connect app does not support all Unicode letters, so some of the more esoteric glyphs might cause the app to ignore your advertising packet.\\
+\\
+Also note that we can recognize the UUID modifiers that we chose for the service and characteristic, as seen highlighted in figure \ref{fig::exercise_service}.\\
+\\
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.5\linewidth}
+\centering
+\includegraphics[width=0.9\linewidth]{example_exercise_scan.png}
+\caption{nRF Connect scan.}
+\label{fig::exercise_scanning}
+\end{minipage}%
+\begin{minipage}{0.5\linewidth}
+\centering
+\includegraphics[width=0.9\linewidth]{example_exercise_gatt_highlighted.png}
+\caption{Custom service.}
+\label{fig::exercise_service}
+\end{minipage}
+\end{figure}
+\noindent
+You can now download the Characteristic User Description descriptor by clicking the download symbol underneath the descriptors category in figure \ref{fig::exercise_service}. The descriptor then tells you that this is a characteristic for the LED matrix.\\
+\\
+As in the example program, you can toggle the LED matrix by writing a byte to the matrix characteristic.
+
+\section{What now?}
+Now you are free to integrate the micro:bit into your project however you wish, for example by broadcasting the score over Bluetooth to your phone. The remainder of this section will mainly deal with two things; firstly, I will give some tips on how to add notification support, so you do not have to manually read a characteristic when it changes. Secondly, I will give a few suggestions about how you can interface the micro:bit with the rest of your project.
+
+\subsection{Notifications}
+Suppose you want to add notifications for when you press buttons on the micro:bit. This can be done by either adding a new service, or adding a new characteristic to our already existing service. Since our service is named "ubit" and deals with the micro:bit hardware, it makes the most sense to expand this service.\\
+\\
+The first thing you would do, is to add new handles for the new service, by updating the definition of \mintinline{text}{m_service_ubit}:
+\begin{minted}{c}
+static struct {
+	uint16_t conn_handle;
+	uint16_t service_handle;
+	ble_gatts_char_handles_t matrix_handles;
+	ble_gatts_char_handles_t button_handles;
+} m_service_ubit;
+\end{minted}
+Since we have two buttons on the micro:bit, it makes sense to use an array of two \mintinline{c}{uint8_t}s to represent their state - though you stand free to squeeze them both into one byte, if you want to be greedy with the resources:
+\begin{minted}{c}
+static uint8_t m_button_press_a_b[2] = {0, 0};
+static uint8_t m_button_press_a_b_previous[2] = {0, 0};
+\end{minted}
+This is analogous to our \mintinline{c}{static uint8_t m_matrix_attr_value} from earlier. The reason we create two copies, is so we can notify the phone only when the button states update. This way, we do not needlessly transmit the button states unless they have changed since the last time we transmitted.
 
 \newpage
 \noindent
