@@ -14,9 +14,12 @@
 }}
 #define CUSTOM_UUID_SERVICE_UBIT 0xbabe
 #define CUSTOM_UUID_CHAR_MATRIX 0xdead
-
+#define CUSTOM_UUID_CHAR_BUTTON 0xb00b
 
 extern uint8_t __data_start__;
+
+static uint8_t m_button_press_a_b[2] = {0, 0};
+static uint8_t m_button_press_a_b_previous[2] = {0, 0};
 
 static uint8_t m_matrix_attr_value = 0;
 
@@ -24,6 +27,7 @@ static struct {
 	uint16_t conn_handle;
 	uint16_t service_handle;
 	ble_gatts_char_handles_t matrix_handles;
+	ble_gatts_char_handles_t button_handles;
 } m_service_ubit;
 
 uint32_t bluetooth_init(){
@@ -50,8 +54,7 @@ uint32_t bluetooth_gap_advertise_start(){
 
 	static uint8_t adv_data[] = {
 		11, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
-		'B', 0xc3, 0xbc, 'c', 'k', ' ', 'D', 'i', 'c', 'h',
-		/* 'P', 'a', 'r', 'e', 'i', 'd', 'o', 'l', 'i', 'a' */
+		'P', 'a', 'r', 'e', 'i', 'd', 'o', 'l', 'i', 'a'
 	};
 	uint8_t adv_data_length = 12;
 
@@ -134,6 +137,57 @@ uint32_t bluetooth_gatts_start(){
 		&m_service_ubit.matrix_handles
 	);
 
+	////////////
+
+	ble_uuid_t button_uuid;
+	button_uuid.uuid = CUSTOM_UUID_CHAR_BUTTON;
+
+	err_code = sd_ble_uuid_vs_add(&base_uuid, &button_uuid.type);
+	ubit_uart_print("Button UUID: %d\n\r", err_code);
+
+	ble_gatts_attr_md_t button_cccd_md;
+	memset(&button_cccd_md, 0, sizeof(button_cccd_md));
+	button_cccd_md.vloc = BLE_GATTS_VLOC_STACK;
+	button_cccd_md.read_perm.sm = 1;
+	button_cccd_md.read_perm.lv = 1;
+	button_cccd_md.write_perm.sm = 1;
+	button_cccd_md.write_perm.lv = 1;
+
+	static uint8_t button_char_desc[] = {
+		'B', 'u', 't', 't', 'o', 'n', 's'
+	};
+	ble_gatts_char_md_t button_char_md;
+	memset(&button_char_md, 0, sizeof(button_char_md));
+	button_char_md.char_props.read = 1;
+	button_char_md.char_props.notify = 1;
+	button_char_md.p_char_user_desc = button_char_desc;
+	button_char_md.char_user_desc_max_size = 7;
+	button_char_md.char_user_desc_size = 7;
+	button_char_md.p_cccd_md = &button_cccd_md;
+
+
+	ble_gatts_attr_md_t button_attr_md;
+	memset(&button_attr_md, 0, sizeof(button_attr_md));
+	button_attr_md.vloc = BLE_GATTS_VLOC_USER;
+	button_attr_md.read_perm.sm = 1;
+	button_attr_md.read_perm.lv = 1;
+
+	ble_gatts_attr_t button_attr;
+	memset(&button_attr, 0, sizeof(button_attr));
+	button_attr.p_uuid = &button_uuid;
+	button_attr.p_attr_md = &button_attr_md;
+	button_attr.init_len = 2;
+	button_attr.max_len = 2;
+	button_attr.p_value = m_button_press_a_b;
+
+	err_code = sd_ble_gatts_characteristic_add(
+		m_service_ubit.service_handle,
+		&button_char_md,
+		&button_attr,
+		&m_service_ubit.button_handles
+	);
+	ubit_uart_print("Button char add: %d\n\r", err_code);
+
 	return err_code;
 }
 
@@ -186,5 +240,33 @@ void bluetooth_serve_forever(){
 			ble_event_buffer_size = 100;
 		}
 		ble_event_buffer_size = 100;
+
+
+		m_button_press_a_b[0] = ubit_button_press_a();
+		m_button_press_a_b[1] = ubit_button_press_b();
+
+		if( m_button_press_a_b[0] != m_button_press_a_b_previous[0] ||
+			m_button_press_a_b[1] != m_button_press_a_b_previous[1]){
+
+			m_button_press_a_b_previous[0] = m_button_press_a_b[0];
+			m_button_press_a_b_previous[1] = m_button_press_a_b[1];
+
+			if(m_service_ubit.conn_handle != BLE_CONN_HANDLE_INVALID){
+				uint16_t notification_length = 2;
+
+				ble_gatts_hvx_params_t hvx_params;
+				memset(&hvx_params, 0, sizeof(hvx_params));
+				hvx_params.handle =
+					m_service_ubit.button_handles.value_handle;
+				hvx_params.type = BLE_GATT_HVX_NOTIFICATION;
+				hvx_params.p_len = &notification_length;
+				hvx_params.p_data = m_button_press_a_b;
+
+				sd_ble_gatts_hvx(
+					m_service_ubit.conn_handle,
+					&hvx_params
+				);
+			}
+		}
 	}
 }
