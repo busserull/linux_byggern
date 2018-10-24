@@ -4,31 +4,8 @@
 #include "nrf_sdm.h"
 #include "ble.h"
 #include "ble_gap.h"
-#include "ble_gatts.h"
-
-#include "ubit.h"
-
-#define CUSTOM_UUID_BASE {{\
-	0x46, 0x58, 0x99, 0xa6, 0x43, 0x7f, 0x79, 0xb4,\
-	0xcf, 0x4b, 0x1a, 0x2e, 0xaf, 0x10, 0xff, 0xd8\
-}}
-#define CUSTOM_UUID_SERVICE_UBIT 0xbabe
-#define CUSTOM_UUID_CHAR_MATRIX 0xdead
-#define CUSTOM_UUID_CHAR_BUTTON 0xb00b
 
 extern uint8_t __data_start__;
-
-static uint8_t m_button_press_a_b[2] = {0, 0};
-static uint8_t m_button_press_a_b_previous[2] = {0, 0};
-
-static uint8_t m_matrix_attr_value = 0;
-
-static struct {
-	uint16_t conn_handle;
-	uint16_t service_handle;
-	ble_gatts_char_handles_t matrix_handles;
-	ble_gatts_char_handles_t button_handles;
-} m_service_ubit;
 
 uint32_t bluetooth_init(){
 	uint32_t err_code = 0;
@@ -53,154 +30,38 @@ uint32_t bluetooth_gap_advertise_start(){
 	uint32_t err_code = 0;
 
 	static uint8_t adv_data[] = {
-		11, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
-		'P', 'a', 'r', 'e', 'i', 'd', 'o', 'l', 'i', 'a'
+		// Add some stuff
 	};
-	uint8_t adv_data_length = 12;
+	uint8_t adv_data_length = 0;
 
-	err_code = sd_ble_gap_adv_data_set(
-		adv_data, adv_data_length, NULL, 0
-	);
-	if(err_code){
-		return err_code;
-	}
+	// Add more stuff
 
-	ble_gap_adv_params_t adv_params;
-	memset(&adv_params, 0, sizeof(ble_gap_adv_params_t));
-	adv_params.type = BLE_GAP_ADV_TYPE_ADV_IND;
-	adv_params.interval = 0x80;
+	// Remove these lines when doing the GAP exercise
+	(void)adv_data;
+	(void)adv_data_length;
 
-	err_code = sd_ble_gap_adv_start(&adv_params);
 	return err_code;
 }
 
 uint32_t bluetooth_gatts_start(){
 	uint32_t err_code = 0;
 
-	ble_uuid128_t base_uuid = CUSTOM_UUID_BASE;
-
-	ble_uuid_t ubit_service_uuid;
-	ubit_service_uuid.uuid = CUSTOM_UUID_SERVICE_UBIT;
-
-	err_code = sd_ble_uuid_vs_add(
-		&base_uuid,
-		&ubit_service_uuid.type
-	);
-
-
-	err_code = sd_ble_gatts_service_add(
-		BLE_GATTS_SRVC_TYPE_PRIMARY,
-		&ubit_service_uuid,
-		&m_service_ubit.service_handle
-	);
-
-
-	ble_uuid_t matrix_uuid;
-	matrix_uuid.uuid = CUSTOM_UUID_CHAR_MATRIX;
-
-	err_code = sd_ble_uuid_vs_add(&base_uuid, &matrix_uuid.type);
-
-
-	static uint8_t matrix_char_desc[] = {
-		'L', 'E', 'D', ' ', 'M', 'a', 't', 'r', 'i', 'x',
-	};
-	ble_gatts_char_md_t matrix_char_md;
-	memset(&matrix_char_md, 0, sizeof(matrix_char_md));
-	matrix_char_md.char_props.read = 1;
-	matrix_char_md.char_props.write = 1;
-	matrix_char_md.p_char_user_desc = matrix_char_desc;
-	matrix_char_md.char_user_desc_max_size = 10;
-	matrix_char_md.char_user_desc_size = 10;
-
-
-	ble_gatts_attr_md_t matrix_attr_md;
-	memset(&matrix_attr_md, 0, sizeof(matrix_attr_md));
-	matrix_attr_md.read_perm.lv = 1;
-	matrix_attr_md.read_perm.sm = 1;
-	matrix_attr_md.write_perm.lv = 1;
-	matrix_attr_md.write_perm.sm = 1;
-	matrix_attr_md.vloc = BLE_GATTS_VLOC_USER;
-
-	ble_gatts_attr_t matrix_attr;
-	memset(&matrix_attr, 0, sizeof(matrix_attr));
-	matrix_attr.p_uuid = &matrix_uuid;
-	matrix_attr.p_attr_md = &matrix_attr_md;
-	matrix_attr.init_len = 1;
-	matrix_attr.max_len = 1;
-	matrix_attr.p_value = &m_matrix_attr_value;
-
-
-	err_code = sd_ble_gatts_characteristic_add(
-		m_service_ubit.service_handle,
-		&matrix_char_md,
-		&matrix_attr,
-		&m_service_ubit.matrix_handles
-	);
-
-	////////////
-
-	ble_uuid_t button_uuid;
-	button_uuid.uuid = CUSTOM_UUID_CHAR_BUTTON;
-
-	err_code = sd_ble_uuid_vs_add(&base_uuid, &button_uuid.type);
-	ubit_uart_print("Button UUID: %d\n\r", err_code);
-
-	ble_gatts_attr_md_t button_cccd_md;
-	memset(&button_cccd_md, 0, sizeof(button_cccd_md));
-	button_cccd_md.vloc = BLE_GATTS_VLOC_STACK;
-	button_cccd_md.read_perm.sm = 1;
-	button_cccd_md.read_perm.lv = 1;
-	button_cccd_md.write_perm.sm = 1;
-	button_cccd_md.write_perm.lv = 1;
-
-	static uint8_t button_char_desc[] = {
-		'B', 'u', 't', 't', 'o', 'n', 's'
-	};
-	ble_gatts_char_md_t button_char_md;
-	memset(&button_char_md, 0, sizeof(button_char_md));
-	button_char_md.char_props.read = 1;
-	button_char_md.char_props.notify = 1;
-	button_char_md.p_char_user_desc = button_char_desc;
-	button_char_md.char_user_desc_max_size = 7;
-	button_char_md.char_user_desc_size = 7;
-	button_char_md.p_cccd_md = &button_cccd_md;
-
-
-	ble_gatts_attr_md_t button_attr_md;
-	memset(&button_attr_md, 0, sizeof(button_attr_md));
-	button_attr_md.vloc = BLE_GATTS_VLOC_USER;
-	button_attr_md.read_perm.sm = 1;
-	button_attr_md.read_perm.lv = 1;
-
-	ble_gatts_attr_t button_attr;
-	memset(&button_attr, 0, sizeof(button_attr));
-	button_attr.p_uuid = &button_uuid;
-	button_attr.p_attr_md = &button_attr_md;
-	button_attr.init_len = 2;
-	button_attr.max_len = 2;
-	button_attr.p_value = m_button_press_a_b;
-
-	err_code = sd_ble_gatts_characteristic_add(
-		m_service_ubit.service_handle,
-		&button_char_md,
-		&button_attr,
-		&m_service_ubit.button_handles
-	);
-	ubit_uart_print("Button char add: %d\n\r", err_code);
-
 	return err_code;
 }
 
 void bluetooth_serve_forever(){
+	// Comment all this in when doing GATT serving
+
+	/*
 	uint8_t ble_event_buffer[100] = {0};
 	uint16_t ble_event_buffer_size = 100;
 
 	while(1){
 		if(m_matrix_attr_value != 0){
-			ubit_led_matrix_turn_on();
+			// Matrix on
 		}
 		else{
-			ubit_led_matrix_turn_off();
+			// Matrix off
 		}
 
 		while(
@@ -242,31 +103,6 @@ void bluetooth_serve_forever(){
 		ble_event_buffer_size = 100;
 
 
-		m_button_press_a_b[0] = ubit_button_press_a();
-		m_button_press_a_b[1] = ubit_button_press_b();
-
-		if( m_button_press_a_b[0] != m_button_press_a_b_previous[0] ||
-			m_button_press_a_b[1] != m_button_press_a_b_previous[1]){
-
-			m_button_press_a_b_previous[0] = m_button_press_a_b[0];
-			m_button_press_a_b_previous[1] = m_button_press_a_b[1];
-
-			if(m_service_ubit.conn_handle != BLE_CONN_HANDLE_INVALID){
-				uint16_t notification_length = 2;
-
-				ble_gatts_hvx_params_t hvx_params;
-				memset(&hvx_params, 0, sizeof(hvx_params));
-				hvx_params.handle =
-					m_service_ubit.button_handles.value_handle;
-				hvx_params.type = BLE_GATT_HVX_NOTIFICATION;
-				hvx_params.p_len = &notification_length;
-				hvx_params.p_data = m_button_press_a_b;
-
-				sd_ble_gatts_hvx(
-					m_service_ubit.conn_handle,
-					&hvx_params
-				);
-			}
-		}
 	}
+	*/
 }
